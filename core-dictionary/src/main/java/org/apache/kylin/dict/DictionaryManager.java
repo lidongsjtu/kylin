@@ -157,10 +157,12 @@ public class DictionaryManager {
             }
         } else {
             logger.info("Growing dict is not enabled");
-            String dupDict = checkDupByContent(newDictInfo, newDict);
-            if (dupDict != null) {
-                logger.info("Identical dictionary content, reuse existing dictionary at " + dupDict);
-                return getDictionaryInfo(dupDict);
+            if (!(newDict instanceof AppendTrieDictionary)) {
+                String dupDict = checkDupByContent(newDictInfo, newDict);
+                if (dupDict != null) {
+                    logger.info("Identical dictionary content, reuse existing dictionary at " + dupDict);
+                    return getDictionaryInfo(dupDict);
+                }
             }
 
             return saveNewDict(newDictInfo);
@@ -251,13 +253,32 @@ public class DictionaryManager {
             }
         }
 
-        if (identicalSourceDicts) {
+        if (identicalSourceDicts || firstDictInfo.getDictionaryObject() instanceof AppendTrieDictionary) {
             logger.info("Use one of the merging dictionaries directly");
             return dicts.get(0);
         } else {
             Dictionary<?> newDict = DictionaryGenerator.mergeDictionaries(DataType.getType(newDictInfo.getDataType()), dicts);
             return trySaveNewDict(newDict, newDictInfo);
         }
+    }
+
+    public DictionaryInfo buildCubeLevelDictionary(DictionaryInfo dictInfo, DataModelDesc model, TblColRef col, DistinctColumnValuesProvider factTableValueProvider) throws IOException {
+        logger.info("building cube level dictionary for " + col);
+        assert model.isFactTable(col.getTable()) : "CubeLevel Dict only support col of fact table";
+        String srcTable = col.getTable();
+        String srcColName = col.getName();
+        int srcColIdx = col.getColumnDesc().getZeroBasedIndex();
+        ReadableTable inpTable = factTableValueProvider.getDistinctValuesFor(col);
+
+        TableSignature inputSig = inpTable.getSignature();
+        if (inputSig == null) // table does not exists
+            return null;
+        if (dictInfo == null) {
+            dictInfo = new DictionaryInfo(srcTable, srcColName, srcColIdx, col.getDatatype(), inputSig);
+        }
+
+        Dictionary<?> dictionary = DictionaryGenerator.buildDictionary(dictInfo, inpTable, true);
+        return trySaveNewDict(dictionary, dictInfo);
     }
 
     public DictionaryInfo buildDictionary(DataModelDesc model, boolean usingDict, TblColRef col, DistinctColumnValuesProvider factTableValueProvider) throws IOException {
@@ -297,7 +318,7 @@ public class DictionaryManager {
             return getDictionaryInfo(dupDict);
         }
 
-        Dictionary<?> dictionary = DictionaryGenerator.buildDictionary(dictInfo, inpTable);
+        Dictionary<?> dictionary = DictionaryGenerator.buildDictionary(dictInfo, inpTable, false);
         return trySaveNewDict(dictionary, dictInfo);
     }
 

@@ -43,10 +43,9 @@ import org.apache.kylin.dict.lookup.LookupStringTable;
 import org.apache.kylin.dict.lookup.SnapshotManager;
 import org.apache.kylin.dict.lookup.SnapshotTable;
 import org.apache.kylin.dimension.Dictionary;
+import org.apache.kylin.measure.MeasureType;
 import org.apache.kylin.metadata.MetadataManager;
-import org.apache.kylin.metadata.model.SegmentStatusEnum;
-import org.apache.kylin.metadata.model.TableDesc;
-import org.apache.kylin.metadata.model.TblColRef;
+import org.apache.kylin.metadata.model.*;
 import org.apache.kylin.metadata.project.ProjectManager;
 import org.apache.kylin.metadata.realization.IRealization;
 import org.apache.kylin.metadata.realization.IRealizationConstants;
@@ -156,13 +155,56 @@ public class CubeManager implements IRealizationProvider {
         return result;
     }
 
+    private boolean isCubeLevelMeasureDictionary(CubeInstance cube, TblColRef col) throws IOException {
+        boolean isDimension = false;
+        boolean needCubeLevelDictionary = false;
+
+        for (TblColRef dimension : cube.getAllDimensions()) {
+            if (dimension.equals(col)) {
+                isDimension = true;
+                break;
+            }
+        }
+        for (MeasureDesc measureDesc : cube.getMeasures()) {
+            FunctionDesc functionDesc = measureDesc.getFunction();
+            MeasureType measureType = functionDesc.getMeasureType();
+            List<TblColRef> measures = measureType.getColumnsNeedDictionary(functionDesc);
+            for (TblColRef measure : measures) {
+                if (measure.equals(col)) {
+                    needCubeLevelDictionary |= measureType.needCubeLevelDictionary();
+                    break;
+                }
+            }
+        }
+
+        if (needCubeLevelDictionary) {
+            if (isDimension) {
+                throw new IOException(String.format("Unsupport column %s being both dimension and measure which need cube level dict", col));
+            }
+            return true;
+        }
+
+        return false;
+    }
+
     public DictionaryInfo buildDictionary(CubeSegment cubeSeg, TblColRef col, DistinctColumnValuesProvider factTableValueProvider) throws IOException {
         CubeDesc cubeDesc = cubeSeg.getCubeDesc();
         if (!cubeDesc.getAllColumnsNeedDictionary().contains(col))
             return null;
 
         DictionaryManager dictMgr = getDictionaryManager();
-        DictionaryInfo dictInfo = dictMgr.buildDictionary(cubeDesc.getModel(), true, col, factTableValueProvider);
+        DictionaryInfo dictInfo = null;
+        if (isCubeLevelMeasureDictionary(cubeSeg.getCubeInstance(), col)) {
+            CubeSegment firstSeg = cubeSeg.getCubeInstance().getFirstSegment();
+            if (firstSeg != null && firstSeg.getStatus() == SegmentStatusEnum.READY) {
+                String dictResPath = firstSeg.getDictResPath(col);
+                dictInfo = dictMgr.getDictionaryInfo(dictResPath);
+            }
+            dictInfo = dictMgr.buildCubeLevelDictionary(dictInfo, cubeDesc.getModel(), col, factTableValueProvider);
+        } else {
+            dictInfo = dictMgr.buildDictionary(cubeDesc.getModel(), true, col, factTableValueProvider);
+        }
+
 
         if (dictInfo != null) {
             Dictionary dict = dictInfo.getDictionaryObject();

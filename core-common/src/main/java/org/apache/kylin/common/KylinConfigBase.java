@@ -680,4 +680,28 @@ abstract public class KylinConfigBase implements Serializable {
         return result;
     }
 
+    public int getAppendDictBuilderEntrySize() {
+        return Integer.parseInt(getOptional("kylin.dict.append.builder.entry.size", "10000000"));
+    }
+
+    public void setAppendDictBuilderEntrySize(int entrySize) {
+        setProperty("kylin.dict.append.builder.entry.size", String.valueOf(entrySize));
+    }
+
+    public int getAppendDictBuilderCacheSize() {
+        return Integer.parseInt(getOptional("kylin.dict.append.builder.cache.size", "5"));
+    }
+
+    public void setAppendDictBuilderCacheSize(int cacheSize) {
+        setProperty("kylin.dict.append.builder.cache.size", String.valueOf(cacheSize));
+    }
+
+    public int getAppendDictCacheSize() {
+        return Integer.parseInt(getOptional("kylin.dict.append.cache.size", "20"));
+    }
+
+    public void setAppendDictCacheSize(int cacheSize) {
+        setProperty("kylin.dict.append.cache.size", String.valueOf(cacheSize));
+    }
+
 }

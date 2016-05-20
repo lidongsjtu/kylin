@@ -57,6 +57,11 @@ public class DictionaryGenerator {
     }
 
     public static Dictionary<String> buildDictionaryFromValueEnumerator(DataType dataType, IDictionaryValueEnumerator valueEnumerator) throws IOException {
+        return buildDictionaryFromValueEnumerator(dataType, valueEnumerator, null, false);
+    }
+
+    public static Dictionary<String> buildDictionaryFromValueEnumerator(DataType dataType, IDictionaryValueEnumerator valueEnumerator,
+                                                                        DictionaryInfo info, boolean isCubeLevel) throws IOException {
         Preconditions.checkNotNull(dataType, "dataType cannot be null");
         Dictionary dict;
         int baseId = 0; // always 0 for now
@@ -64,7 +69,9 @@ public class DictionaryGenerator {
         ArrayList samples = new ArrayList();
 
         // build dict, case by data type
-        if (dataType.isDateTimeFamily()) {
+        if (isCubeLevel) {
+            dict = buildCubeLevelDict(info, valueEnumerator, baseId, nSamples, samples);
+        } else if (dataType.isDateTimeFamily()) {
             if (dataType.isDate())
                 dict = buildDateDict(valueEnumerator, baseId, nSamples, samples);
             else
@@ -85,6 +92,7 @@ public class DictionaryGenerator {
         }
         logger.debug("Dictionary value samples: " + buf.toString());
         logger.debug("Dictionary cardinality " + dict.getSize());
+        logger.debug("Dictionary class " + dict.getClass().getCanonicalName());
         if (dict instanceof TrieDictionary && dict.getSize() > DICT_MAX_CARDINALITY) {
             throw new IllegalArgumentException("Too high cardinality is not suitable for dictionary -- cardinality: " + dict.getSize());
         }
@@ -95,7 +103,7 @@ public class DictionaryGenerator {
         return buildDictionaryFromValueEnumerator(dataType, new MultipleDictionaryValueEnumerator(sourceDicts));
     }
 
-    public static Dictionary<String> buildDictionary(DictionaryInfo info, ReadableTable inpTable) throws IOException {
+    public static Dictionary<String> buildDictionary(DictionaryInfo info, ReadableTable inpTable, boolean isCubeLevel) throws IOException {
 
         // currently all data types are casted to string to build dictionary
         // String dataType = info.getDataType();
@@ -105,7 +113,7 @@ public class DictionaryGenerator {
             logger.debug("Building dictionary object " + JsonUtil.writeValueAsString(info));
 
             columnValueEnumerator = new TableColumnValueEnumerator(inpTable.getReader(), info.getSourceColumnIndex());
-            return buildDictionaryFromValueEnumerator(DataType.getType(info.getDataType()), columnValueEnumerator);
+            return buildDictionaryFromValueEnumerator(DataType.getType(info.getDataType()), columnValueEnumerator, info, isCubeLevel);
         } finally {
             if (columnValueEnumerator != null)
                 columnValueEnumerator.close();
@@ -174,6 +182,26 @@ public class DictionaryGenerator {
             if (StringUtils.isBlank(v)) // empty string is null for numbers
                 continue;
 
+            builder.addValue(v);
+            if (samples.size() < nSamples && samples.contains(v) == false)
+                samples.add(v);
+        }
+        return builder.build(baseId);
+    }
+
+    private static Dictionary buildCubeLevelDict(DictionaryInfo info, IDictionaryValueEnumerator valueEnumerator, int baseId, int nSamples, ArrayList samples) throws IOException {
+        AppendTrieDictionaryBuilder builder;
+        if (info.getDictionaryObject() != null) {
+            builder = ((AppendTrieDictionary<String>)(info.getDictionaryObject())).rebuildTrieTree();
+        } else {
+            builder = new AppendTrieDictionaryBuilder(new StringBytesConverter(), info.getUuid());
+        }
+        byte[] value;
+        while (valueEnumerator.moveNext()) {
+            value = valueEnumerator.current();
+            if (value == null)
+                continue;
+            String v = Bytes.toString(value);
             builder.addValue(v);
             if (samples.size() < nSamples && samples.contains(v) == false)
                 samples.add(v);

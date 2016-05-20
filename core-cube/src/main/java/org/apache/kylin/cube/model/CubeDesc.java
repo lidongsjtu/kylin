@@ -20,18 +20,8 @@ package org.apache.kylin.cube.model;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.TreeSet;
 
 import javax.annotation.Nullable;
 
@@ -1000,7 +990,7 @@ public class CubeDesc extends RootPersistentEntity {
     }
 
     public List<TblColRef> getAllColumnsNeedDictionary() {
-        List<TblColRef> result = Lists.newArrayList();
+        Set<TblColRef> result = new HashSet<>();
 
         for (RowKeyColDesc rowKeyColDesc : rowkey.getRowKeyColumns()) {
             TblColRef colRef = rowKeyColDesc.getColRef();
@@ -1013,7 +1003,7 @@ public class CubeDesc extends RootPersistentEntity {
             MeasureType<?> aggrType = measure.getFunction().getMeasureType();
             result.addAll(aggrType.getColumnsNeedDictionary(measure.getFunction()));
         }
-        return result;
+        return Lists.newArrayList(result);
     }
 
     /**

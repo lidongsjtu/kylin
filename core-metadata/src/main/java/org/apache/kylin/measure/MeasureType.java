@@ -76,6 +76,11 @@ abstract public class MeasureType<T> {
         return Collections.emptyList();
     }
 
+    /** Some special measure need a cube level dictionary, to roll up metrics upon segments. Bitmap is an example. */
+    public boolean needCubeLevelDictionary() {
+        return false;
+    }
+
     /* ============================================================================
      * Cube Selection
      * ---------------------------------------------------------------------------- */

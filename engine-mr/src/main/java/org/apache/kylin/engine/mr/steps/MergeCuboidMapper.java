@@ -125,7 +125,8 @@ public class MergeCuboidMapper extends KylinMapper<Text, Text, Text, Text> {
         for (int i = 0; i < measureDescs.size(); i++) {
             MeasureDesc measureDesc = measureDescs.get(i);
             MeasureType measureType = measureDesc.getFunction().getMeasureType();
-            if (measureType.getColumnsNeedDictionary(measureDesc.getFunction()).isEmpty() == false) {
+            if (measureType.getColumnsNeedDictionary(measureDesc.getFunction()).isEmpty() == false
+                    && !measureType.needCubeLevelDictionary()) {
                 dictMeasures.add(Pair.newPair(i, measureType.newIngester()));
             }
         }
