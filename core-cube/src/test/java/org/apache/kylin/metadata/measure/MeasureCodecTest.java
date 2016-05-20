@@ -58,7 +58,7 @@ public class MeasureCodecTest {
 
         ByteBuffer buf = ByteBuffer.allocate(RowConstants.ROWVALUE_BUFFER_SIZE);
 
-        codec.encode(values, buf);
+        buf = codec.encode(values, buf);
         buf.flip();
         System.out.println("size: " + buf.limit());
 

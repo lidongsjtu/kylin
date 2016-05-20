@@ -102,7 +102,7 @@ public class CuboidReducer extends KylinReducer<Text, Text, Text, Text> {
         aggs.collectStates(result);
 
         valueBuf.clear();
-        codec.encode(result, valueBuf);
+        valueBuf = codec.encode(result, valueBuf);
 
         outputValue.set(valueBuf.array(), 0, valueBuf.position());
         context.write(key, outputValue);

@@ -18,6 +18,7 @@
 
 package org.apache.kylin.measure;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 
@@ -83,10 +84,19 @@ public class MeasureCodec {
         }
     }
 
-    public void encode(Object[] values, ByteBuffer out) {
+    public ByteBuffer encode(Object[] values, ByteBuffer out) {
         assert values.length == nMeasures;
-        for (int i = 0; i < nMeasures; i++) {
-            serializers[i].serialize(values[i], out);
+        ByteBuffer buffer = out;
+        while (true) {
+            try {
+                for (int i = 0; i < nMeasures; i++) {
+                    serializers[i].serialize(values[i], buffer);
+                }
+                break;
+            } catch (BufferOverflowException boe) {
+                buffer = ByteBuffer.allocate(buffer.capacity() * 2);
+            }
         }
+        return buffer;
     }
 }

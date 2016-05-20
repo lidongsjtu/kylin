@@ -25,6 +25,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -358,7 +359,7 @@ public class GTAggregateScanner implements IGTScanner {
 
         class ReturningRecord {
             final GTRecord record = new GTRecord(info);
-            final ByteBuffer metricsBuf = ByteBuffer.allocate(info.getMaxColumnLength(metrics));
+            ByteBuffer metricsBuf = ByteBuffer.allocate(info.getMaxColumnLength(metrics));
 
             void load(byte[] key, MeasureAggregator[] value) {
                 int offset = 0;
@@ -369,11 +370,18 @@ public class GTAggregateScanner implements IGTScanner {
                     offset += columnLength;
                 }
                 metricsBuf.clear();
-                for (int i = 0; i < value.length; i++) {
-                    int col = metrics.trueBitAt(i);
-                    int pos = metricsBuf.position();
-                    info.codeSystem.encodeColumnValue(col, value[i].getState(), metricsBuf);
-                    record.cols[col].set(metricsBuf.array(), pos, metricsBuf.position() - pos);
+                while (true) {
+                    try {
+                        for (int i = 0; i < value.length; i++) {
+                            int col = metrics.trueBitAt(i);
+                            int pos = metricsBuf.position();
+                            info.codeSystem.encodeColumnValue(col, value[i].getState(), metricsBuf);
+                            record.cols[col].set(metricsBuf.array(), pos, metricsBuf.position() - pos);
+                        }
+                        break;
+                    } catch (BufferOverflowException boe) {
+                        metricsBuf = ByteBuffer.allocate(metricsBuf.capacity() * 2);
+                    }
                 }
             }
         }
@@ -430,7 +438,7 @@ public class GTAggregateScanner implements IGTScanner {
                 if (buffMap != null) {
                     ObjectOutputStream oos = null;
                     Object[] aggrResult = null;
-                    final ByteBuffer metricsBuf = ByteBuffer.allocate(info.getMaxColumnLength(metrics));
+                    ByteBuffer metricsBuf = ByteBuffer.allocate(info.getMaxColumnLength(metrics));
                     try {
                         dumpedFile = File.createTempFile("KYLIN_AGGR_", ".tmp");
 
@@ -443,7 +451,7 @@ public class GTAggregateScanner implements IGTScanner {
                             MeasureAggregators aggs = new MeasureAggregators(entry.getValue());
                             aggrResult = new Object[metrics.trueBitCount()];
                             aggs.collectStates(aggrResult);
-                            measureCodec.encode(aggrResult, metricsBuf);
+                            metricsBuf = measureCodec.encode(aggrResult, metricsBuf);
                             oos.writeObject(entry.getKey());
                             oos.writeObject(metricsBuf.array());
                         }

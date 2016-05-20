@@ -165,7 +165,7 @@ public class CubeReducerTest extends LocalFileMetadataTestCase {
         Object[] values = new Object[] { new BigDecimal(sum), new BigDecimal(min), new BigDecimal(max), new LongMutable(count), new LongMutable(item_count) };
 
         buf.clear();
-        codec.encode(values, buf);
+        buf = codec.encode(values, buf);
 
         Text t = new Text();
         t.set(buf.array(), 0, buf.position());

@@ -160,7 +160,7 @@ public class BaseCuboidMapperBase<KEYIN, VALUEIN> extends KylinMapper<KEYIN, VAL
         }
 
         valueBuf.clear();
-        measureCodec.encode(measures, valueBuf);
+        valueBuf = measureCodec.encode(measures, valueBuf);
     }
 
     private Object buildValueOf(int idxOfMeasure, SplittedBytes[] splitBuffers) {

@@ -77,7 +77,7 @@ public class KeyValueCreator {
         }
 
         valueBuf.clear();
-        codec.encode(colValues, valueBuf);
+        valueBuf = codec.encode(colValues, valueBuf);
 
         return create(keyBytes, keyOffset, keyLength, valueBuf.array(), 0, valueBuf.position());
     }

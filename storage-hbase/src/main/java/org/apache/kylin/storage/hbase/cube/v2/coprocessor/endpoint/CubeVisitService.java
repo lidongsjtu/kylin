@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
@@ -298,7 +299,14 @@ public class CubeVisitService extends CubeVisitProtos.CubeVisitService implement
                 }
 
                 buffer.clear();
-                oneRecord.exportColumns(scanReq.getColumns(), buffer);
+                while (true) {
+                    try {
+                        oneRecord.exportColumns(scanReq.getColumns(), buffer);
+                        break;
+                    } catch (BufferOverflowException boe) {
+                        buffer = ByteBuffer.allocate(buffer.capacity() * 4);
+                    }
+                }
                 buffer.flip();
 
                 outputStream.write(buffer.array(), buffer.arrayOffset() - buffer.position(), buffer.remaining());

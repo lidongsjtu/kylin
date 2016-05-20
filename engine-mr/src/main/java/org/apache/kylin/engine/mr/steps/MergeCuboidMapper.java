@@ -235,7 +235,7 @@ public class MergeCuboidMapper extends KylinMapper<Text, Text, Text, Text> {
                 measureObjs[i] = ingester.reEncodeDictionary(measureObjs[i], measureDescs.get(i), oldDicts, newDicts);
             }
             valueBuf.clear();
-            codec.encode(measureObjs, valueBuf);
+            valueBuf = codec.encode(measureObjs, valueBuf);
             outputValue.set(valueBuf.array(), 0, valueBuf.position());
             value = outputValue;
         }

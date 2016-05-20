@@ -422,7 +422,7 @@ public class SparkCubing extends AbstractApplication {
             @Override
             public Iterable<Tuple2<byte[], byte[]>> call(final Iterator<Tuple2<byte[], byte[]>> tuple2Iterator) throws Exception {
                 return new Iterable<Tuple2<byte[], byte[]>>() {
-                    final ByteBuffer buffer = ByteBuffer.allocate(RowConstants.ROWVALUE_BUFFER_SIZE);
+                    ByteBuffer buffer = ByteBuffer.allocate(RowConstants.ROWVALUE_BUFFER_SIZE);
                     final MeasureCodec codec = new MeasureCodec(dataTypes);
                     final Object[] input = new Object[measureSize];
                     final Object[] result = new Object[measureSize];
@@ -443,7 +443,7 @@ public class SparkCubing extends AbstractApplication {
                                 }
                                 aggs.collectStates(result);
                                 buffer.clear();
-                                codec.encode(result, buffer);
+                                buffer = codec.encode(result, buffer);
                                 byte[] bytes = new byte[buffer.position()];
                                 System.arraycopy(buffer.array(), buffer.arrayOffset(), bytes, 0, buffer.position());
                                 return bytes;

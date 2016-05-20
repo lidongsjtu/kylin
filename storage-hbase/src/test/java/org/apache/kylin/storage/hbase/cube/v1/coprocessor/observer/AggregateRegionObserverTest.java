@@ -95,7 +95,7 @@ public class AggregateRegionObserverTest {
         new Object[] { new BigDecimal(decimal) } //
                 : new Object[] { new BigDecimal(decimal), new LongMutable(number) };
         buf.clear();
-        col.measureCodec.encode(values, buf);
+        buf = col.measureCodec.encode(values, buf);
 
         Cell keyValue = new KeyValue(key, 0, key.length, //
                 col.family, 0, col.family.length, //
