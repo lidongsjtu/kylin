@@ -704,4 +704,8 @@ abstract public class KylinConfigBase implements Serializable {
         setProperty("kylin.dict.append.cache.size", String.valueOf(cacheSize));
     }
 
+    public boolean getCompressionResult() {
+        return Boolean.parseBoolean(getOptional("kylin.query.endpoint.compression.result", "true"));
+    }
+
 }
