@@ -21,6 +21,8 @@ package org.apache.kylin.rest.service;
 import java.io.IOException;
 import java.sql.SQLException;
 
+import org.apache.kylin.common.QueryContext;
+import org.apache.kylin.common.QueryContextManager;
 import org.apache.kylin.job.exception.JobException;
 import org.apache.kylin.metadata.project.ProjectInstance;
 import org.apache.kylin.query.QueryConnection;
@@ -62,8 +64,9 @@ public class QueryServiceTest extends ServiceTestBase {
         SQLRequest request = new SQLRequest();
         request.setSql("select * from test_table");
         request.setAcceptPartial(true);
+        QueryContext queryContext = QueryContextManager.current();
         SQLResponse response = new SQLResponse();
         response.setHitExceptionCache(true);
-        queryService.logQuery(request, response);
+        queryService.logQuery(queryContext.getQueryId(), request, response);
     }
 }
