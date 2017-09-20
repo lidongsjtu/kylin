@@ -48,6 +48,7 @@ public class QueryContext {
 
     private final String queryId;
     private String username;
+
     private AtomicLong scannedRows = new AtomicLong();
     private AtomicLong scannedBytes = new AtomicLong();
 

@@ -486,6 +486,8 @@ public class QueryService extends BasicService {
                     checkQueryAuth(sqlResponse, project, secureEnabled);
 
                 } catch (Throwable e) { // calcite may throw AssertError
+                    queryContext.stop(e);
+
                     logger.error("Exception while executing query", e);
                     String errMsg = makeErrorMsgUserFriendly(e);
 
