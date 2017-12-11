@@ -50,6 +50,7 @@ public class QueryContext {
     private String username;
 
     private AtomicLong scannedRows = new AtomicLong();
+    private AtomicLong returnedRows = new AtomicLong();
     private AtomicLong scannedBytes = new AtomicLong();
 
     private AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -117,6 +118,14 @@ public class QueryContext {
 
     public long addAndGetScannedRows(long deltaRows) {
         return scannedRows.addAndGet(deltaRows);
+    }
+
+    public long getReturnedRows() {
+        return returnedRows.get();
+    }
+
+    public long addAndGetReturnedRows(long deltaRows) {
+        return returnedRows.addAndGet(deltaRows);
     }
 
     public long getScannedBytes() {
