@@ -56,7 +56,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.kylin.common.KylinConfig;
 import org.apache.kylin.common.QueryContext;
-import org.apache.kylin.common.QueryContextManager;
+import org.apache.kylin.common.QueryContextFacade;
 import org.apache.kylin.common.debug.BackdoorToggles;
 import org.apache.kylin.common.exceptions.ResourceLimitExceededException;
 import org.apache.kylin.common.persistence.ResourceStore;
@@ -402,7 +402,7 @@ public class QueryService extends BasicService {
         if (sqlRequest.getBackdoorToggles() != null)
             BackdoorToggles.addToggles(sqlRequest.getBackdoorToggles());
 
-        final QueryContext queryContext = QueryContextManager.current();
+        final QueryContext queryContext = QueryContextFacade.current();
 
         try (SetThreadName ignored = new SetThreadName("Query %s", queryContext.getQueryId())) {
             String sql = sqlRequest.getSql();
@@ -519,7 +519,7 @@ public class QueryService extends BasicService {
 
         } finally {
             BackdoorToggles.cleanToggles();
-            QueryContextManager.resetCurrent();
+            QueryContextFacade.resetCurrent();
         }
     }
 
@@ -564,7 +564,7 @@ public class QueryService extends BasicService {
             conn = QueryConnection.getConnection(sqlRequest.getProject());
 
             String userInfo = SecurityContextHolder.getContext().getAuthentication().getName();
-            QueryContext context = QueryContextManager.current();
+            QueryContext context = QueryContextFacade.current();
             context.setUsername(userInfo);
             final Collection<? extends GrantedAuthority> grantedAuthorities = SecurityContextHolder.getContext()
                     .getAuthentication().getAuthorities();
@@ -980,7 +980,7 @@ public class QueryService extends BasicService {
         boolean isPartialResult = false;
         StringBuilder cubeSb = new StringBuilder();
         StringBuilder logSb = new StringBuilder("Processed rows for each storageContext: ");
-        QueryContext queryContext = QueryContextManager.current();
+        QueryContext queryContext = QueryContextFacade.current();
         if (OLAPContext.getThreadLocalContexts() != null) { // contexts can be null in case of 'explain plan for'
             for (OLAPContext ctx : OLAPContext.getThreadLocalContexts()) {
                 String realizationName = "NULL";
