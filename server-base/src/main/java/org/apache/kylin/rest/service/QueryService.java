@@ -58,7 +58,7 @@ import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.BasicSqlType;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.kylin.cache.cachemanager.MemcachedQueryCacheManager;
+import org.apache.kylin.cache.cachemanager.MemcachedCacheManager;
 import org.apache.kylin.common.KylinConfig;
 import org.apache.kylin.common.QueryContext;
 import org.apache.kylin.common.QueryContextFacade;
@@ -533,7 +533,7 @@ public class QueryService extends BasicService {
                             "query is executed with pushdown, but it is non-select, or the cache for pushdown is disabled") //
                     && checkCondition(
                             cacheManager
-                                    .getCache(QUERY_CACHE) instanceof MemcachedQueryCacheManager.MemCachedCacheAdaptor
+                                    .getCache(QUERY_CACHE) instanceof MemcachedCacheManager.MemCachedCacheAdaptor
                                     || sqlResponse.getDuration() > durationThreshold
                                     || sqlResponse.getTotalScanCount() > scanCountThreshold
                                     || sqlResponse.getTotalScanBytes() > scanBytesThreshold, //
@@ -631,8 +631,10 @@ public class QueryService extends BasicService {
             }
             logger.info("Duplicated SQL request is running, waiting...");
             try {
-                Thread.sleep(100);
+                Thread.sleep(100L);
             } catch (InterruptedException e) {
+                logger.error("Thread interrupted due to " + e);
+                throw new RuntimeException(e);
             }
             wrapper = queryCache.get(sqlRequest.getCacheKey());
             if (wrapper == null) {
