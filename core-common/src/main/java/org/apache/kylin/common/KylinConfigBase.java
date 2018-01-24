@@ -1384,6 +1384,10 @@ abstract public class KylinConfigBase implements Serializable {
         return getOptional("kylin.query.realization-filter", null);
     }
 
+    public boolean isQuerySignatureDetailedExpiredReasonEnabled() {
+        return Boolean.valueOf(this.getOptional("kylin.query.signature-detailed-expired-reason-enabled", "false"));
+    }
+
     // ============================================================================
     // SERVER
     // ============================================================================
