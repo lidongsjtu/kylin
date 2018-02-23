@@ -1215,8 +1215,12 @@ abstract public class KylinConfigBase implements Serializable {
         return Integer.parseInt(getOptional("kylin.query.scan-threshold", "10000000"));
     }
 
-    public boolean isQueryDuplicationDummpyResponseEnabled() {
-        return Boolean.parseBoolean(getOptional("kylin.query.duplication-dummpy-response-enabled", "false"));
+    public boolean isLazyQueryEnabled() {
+        return Boolean.parseBoolean(getOptional("kylin.query.lazy-query-enabled", "false"));
+    }
+
+    public long getLazyQueryWaitingTimeoutMilliSeconds() {
+        return Long.parseLong(getOptional("kylin.query.lazy-query-waiting-timeout-milliseconds", "60000L"));
     }
 
     public int getQueryConcurrentRunningThresholdForProject() {
@@ -1289,6 +1293,10 @@ abstract public class KylinConfigBase implements Serializable {
         return Boolean.parseBoolean(this.getOptional("kylin.query.cache-enabled", "true"));
     }
 
+    public boolean isQueryCacheSignatureEnabled() {
+        return Boolean.parseBoolean(this.getOptional("kylin.query.cache-signature-enabled", "false"));
+    }
+
     public boolean isQueryIgnoreUnknownFunction() {
         return Boolean.parseBoolean(this.getOptional("kylin.query.ignore-unknown-function", "false"));
     }
@@ -1301,13 +1309,13 @@ abstract public class KylinConfigBase implements Serializable {
         return Boolean.parseBoolean(getOptional("kylin.query.segment-cache-enabled", "false"));
     }
 
-    public int getQuerySegmentCacheTimeout() {
-        return Integer.parseInt(getOptional("kylin.query.segment-cache-timeout", "2000"));
+    public int getQuerySegmentCacheTimeoutMilliSeconds() {
+        return Integer.parseInt(getOptional("kylin.query.segment-cache-timeout-milliseconds", "2000"));
     }
 
     // define the maximum size for each segment in one query that can be cached, in megabytes
-    public int getQuerySegmentCacheMaxSize() {
-        return Integer.parseInt(getOptional("kylin.query.segment-cache-max-size", "200"));
+    public int getQuerySegmentCacheMaxMB() {
+        return Integer.parseInt(getOptional("kylin.query.segment-cache-max-mb", "200"));
     }
 
     public String getQueryAccessController() {
