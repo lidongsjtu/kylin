@@ -22,7 +22,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import org.apache.commons.lang3.SerializationUtils;
-import org.apache.kylin.common.QueryContext;
+import org.apache.kylin.common.QueryContext.CubeSegmentStatisticsResult;
 import org.apache.kylin.metadata.querymeta.SelectedColumnMeta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,8 +73,15 @@ public class SQLResponse implements Serializable {
     protected boolean queryPushDown = false;
 
     protected byte[] queryStatistics;
-    
+
     protected String traceUrl = null;
+
+    // it's sql response signature for cache checking, no need to return and should be JsonIgnore
+    protected String signature;
+
+    // it's a temporary flag, no need to return and should be JsonIgnore
+    // indicating the lazy query start time, -1 indicating not enabled
+    protected long lazyQueryStartTime = -1L;
 
     public SQLResponse() {
     }
@@ -205,20 +212,42 @@ public class SQLResponse implements Serializable {
     public void setTraceUrl(String traceUrl) {
         this.traceUrl = traceUrl;
     }
-    
+
     @JsonIgnore
-    public List<QueryContext.CubeSegmentStatisticsResult> getCubeSegmentStatisticsList() {
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
+    }
+
+    @JsonIgnore
+    public long getLazyQueryStartTime() {
+        return lazyQueryStartTime;
+    }
+
+    public void setLazyQueryStartTime(long lazyQueryStartTime) {
+        this.lazyQueryStartTime = lazyQueryStartTime;
+    }
+
+    @JsonIgnore
+    public boolean isRunning() {
+        return this.lazyQueryStartTime >= 0;
+    }
+
+    @JsonIgnore
+    public List<CubeSegmentStatisticsResult> getCubeSegmentStatisticsList() {
         try {
-            return queryStatistics == null ? Lists.<QueryContext.CubeSegmentStatisticsResult> newArrayList()
-                    : (List<QueryContext.CubeSegmentStatisticsResult>) SerializationUtils.deserialize(queryStatistics);
+            return queryStatistics == null ? Lists.<CubeSegmentStatisticsResult> newArrayList()
+                    : (List<CubeSegmentStatisticsResult>) SerializationUtils.deserialize(queryStatistics);
         } catch (Exception e) { // deserialize exception should not block query
             logger.warn("Error while deserialize queryStatistics due to " + e);
             return Lists.newArrayList();
         }
     }
 
-    public void setCubeSegmentStatisticsList(
-            List<QueryContext.CubeSegmentStatisticsResult> cubeSegmentStatisticsList) {
+    public void setCubeSegmentStatisticsList(List<CubeSegmentStatisticsResult> cubeSegmentStatisticsList) {
         try {
             this.queryStatistics = cubeSegmentStatisticsList == null ? null
                     : SerializationUtils.serialize((Serializable) cubeSegmentStatisticsList);

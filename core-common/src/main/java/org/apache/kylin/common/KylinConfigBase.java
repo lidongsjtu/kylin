@@ -1215,6 +1215,14 @@ abstract public class KylinConfigBase implements Serializable {
         return Integer.parseInt(getOptional("kylin.query.scan-threshold", "10000000"));
     }
 
+    public boolean isLazyQueryEnabled() {
+        return Boolean.parseBoolean(getOptional("kylin.query.lazy-query-enabled", "false"));
+    }
+
+    public long getLazyQueryWaitingTimeoutMilliSeconds() {
+        return Long.parseLong(getOptional("kylin.query.lazy-query-waiting-timeout-milliseconds", "60000L"));
+    }
+
     public int getQueryConcurrentRunningThresholdForProject() {
         // by default there's no limitation
         return Integer.parseInt(getOptional("kylin.query.project-concurrent-running-threshold", "0"));
@@ -1285,8 +1293,29 @@ abstract public class KylinConfigBase implements Serializable {
         return Boolean.parseBoolean(this.getOptional("kylin.query.cache-enabled", "true"));
     }
 
+    public boolean isQueryCacheSignatureEnabled() {
+        return Boolean.parseBoolean(this.getOptional("kylin.query.cache-signature-enabled", "false"));
+    }
+
     public boolean isQueryIgnoreUnknownFunction() {
         return Boolean.parseBoolean(this.getOptional("kylin.query.ignore-unknown-function", "false"));
+    }
+    
+    public String getMemCachedHosts() {
+        return getRequired("kylin.cache.memcached.hosts");
+    }
+
+    public boolean isQuerySegmentCacheEnabled() {
+        return Boolean.parseBoolean(getOptional("kylin.query.segment-cache-enabled", "false"));
+    }
+
+    public int getQuerySegmentCacheTimeoutMilliSeconds() {
+        return Integer.parseInt(getOptional("kylin.query.segment-cache-timeout-milliseconds", "2000"));
+    }
+
+    // define the maximum size for each segment in one query that can be cached, in megabytes
+    public int getQuerySegmentCacheMaxMB() {
+        return Integer.parseInt(getOptional("kylin.query.segment-cache-max-mb", "200"));
     }
 
     public String getQueryAccessController() {
@@ -1376,6 +1405,11 @@ abstract public class KylinConfigBase implements Serializable {
         return getOptional("kylin.query.realization-filter", null);
     }
 
+    public String getSQLResponseSignatureClass() {
+        return this.getOptional("kylin.query.signature-class",
+                "org.apache.kylin.rest.signature.FactTableRealizationSetCalculator");
+    }
+
     // ============================================================================
     // SERVER
     // ============================================================================
@@ -1440,6 +1474,10 @@ abstract public class KylinConfigBase implements Serializable {
 
     public String getLDAPAdminRole() {
         return getOptional("kylin.security.acl.admin-role", "");
+    }
+
+    public boolean isServerAclCacheEnabled() {
+        return Boolean.parseBoolean(this.getOptional("kylin.server.acl-cache-enabled", "true"));
     }
 
     // ============================================================================
@@ -1538,7 +1576,7 @@ abstract public class KylinConfigBase implements Serializable {
     }
 
     public String getKylinMetricsSubjectSuffix() {
-        return getOptional("kylin.core.metric.subject-suffix", getDeployEnv());
+        return getOptional("kylin.metric.subject-suffix", getDeployEnv());
     }
 
     public String getKylinMetricsSubjectJob() {
@@ -1562,5 +1600,9 @@ abstract public class KylinConfigBase implements Serializable {
     public String getKylinMetricsSubjectQueryRpcCall() {
         return getOptional("kylin.metrics.subject-query-rpc", "METRICS_QUERY_RPC") + "_"
                 + getKylinMetricsSubjectSuffix();
+    }
+
+    public Map<String, String> getKylinMetricsConf() {
+        return getPropertiesByPrefix("kylin.metrics.");
     }
 }

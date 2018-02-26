@@ -18,6 +18,7 @@
 
 package org.apache.kylin.rest.service;
 
+import static org.apache.kylin.cache.cachemanager.CacheConstants.QUERY_CACHE;
 import static org.apache.kylin.common.util.CheckUtil.checkCondition;
 
 import java.io.DataInputStream;
@@ -54,8 +55,10 @@ import org.apache.calcite.prepare.CalcitePrepareImpl;
 import org.apache.calcite.prepare.OnlyPrepareEarlyAbortException;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.sql.type.BasicSqlType;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.kylin.cache.cachemanager.MemcachedCacheManager;
 import org.apache.kylin.common.KylinConfig;
 import org.apache.kylin.common.QueryContext;
 import org.apache.kylin.common.QueryContextFacade;
@@ -105,6 +108,7 @@ import org.apache.kylin.rest.response.SQLResponse;
 import org.apache.kylin.rest.util.AclEvaluate;
 import org.apache.kylin.rest.util.AclPermissionUtil;
 import org.apache.kylin.rest.util.QueryRequestLimits;
+import org.apache.kylin.rest.util.SQLResponseSignatureUtil;
 import org.apache.kylin.rest.util.TableauInterceptor;
 import org.apache.kylin.shaded.htrace.org.apache.htrace.Sampler;
 import org.apache.kylin.shaded.htrace.org.apache.htrace.Trace;
@@ -114,6 +118,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -123,12 +129,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-
-import net.sf.ehcache.Cache;
-import net.sf.ehcache.CacheManager;
-import net.sf.ehcache.Element;
 
 /**
  * @author xduo
@@ -136,8 +139,6 @@ import net.sf.ehcache.Element;
 @Component("queryService")
 public class QueryService extends BasicService {
 
-    public static final String SUCCESS_QUERY_CACHE = "StorageCache";
-    public static final String EXCEPTION_QUERY_CACHE = "ExceptionQueryCache";
     public static final String QUERY_STORE_PATH_PREFIX = "/query/";
     private static final Logger logger = LoggerFactory.getLogger(QueryService.class);
     final BadQueryDetector badQueryDetector = new BadQueryDetector();
@@ -210,7 +211,7 @@ public class QueryService extends BasicService {
             columnMetas.add(new SelectedColumnMeta(false, false, false, false, 1, false, Integer.MAX_VALUE, "c0", "c0",
                     null, null, null, Integer.MAX_VALUE, 128, 1, "char", false, false, false));
 
-            return buildSqlResponse(true, r.getFirst(), columnMetas);
+            return buildSqlResponse(sqlRequest.getProject(), true, r.getFirst(), columnMetas);
 
         } catch (Exception e) {
             logger.info("pushdown engine failed to finish current non-select query");
@@ -294,6 +295,12 @@ public class QueryService extends BasicService {
                     realizationNames.add(ctx.realization.getCanonicalName());
                 }
 
+            }
+        }
+
+        if (realizationNames.isEmpty()) {
+            if (!Strings.isNullOrEmpty(response.getCube())) {
+                CollectionUtils.addAll(realizationNames, response.getCube().split(","));
             }
         }
 
@@ -487,8 +494,16 @@ public class QueryService extends BasicService {
         Message msg = MsgPicker.getMsg();
         final QueryContext queryContext = QueryContextFacade.current();
 
+        boolean isLazyQueryEnabled = queryCacheEnabled && kylinConfig.isLazyQueryEnabled();
         SQLResponse sqlResponse = null;
         try {
+            // Add dummy response which will be updated or evicted when query finishes
+            if (isLazyQueryEnabled) {
+                SQLResponse dummyResponse = new SQLResponse();
+                dummyResponse.setLazyQueryStartTime(System.currentTimeMillis());
+                cacheManager.getCache(QUERY_CACHE).put(sqlRequest.getCacheKey(), dummyResponse);
+            }
+
             final boolean isSelect = QueryUtil.isSelectStatement(sqlRequest.getSql());
             if (isSelect) {
                 sqlResponse = query(sqlRequest);
@@ -509,13 +524,16 @@ public class QueryService extends BasicService {
                     String.valueOf(sqlResponse.getIsException()), String.valueOf(sqlResponse.getDuration()),
                     String.valueOf(sqlResponse.getTotalScanCount()));
             if (checkCondition(queryCacheEnabled, "query cache is disabled") //
+                    && checkCondition(!Strings.isNullOrEmpty(sqlResponse.getCube()),
+                            "query does not hit cube nor hybrid") //
                     && checkCondition(!sqlResponse.getIsException(), "query has exception") //
                     && checkCondition(
                             !(sqlResponse.isPushDown()
                                     && (isSelect == false || kylinConfig.isPushdownQueryCacheEnabled() == false)),
                             "query is executed with pushdown, but it is non-select, or the cache for pushdown is disabled") //
                     && checkCondition(
-                            sqlResponse.getDuration() > durationThreshold
+                            cacheManager.getCache(QUERY_CACHE) instanceof MemcachedCacheManager.MemCachedCacheAdaptor
+                                    || sqlResponse.getDuration() > durationThreshold
                                     || sqlResponse.getTotalScanCount() > scanCountThreshold
                                     || sqlResponse.getTotalScanBytes() > scanBytesThreshold, //
                             "query is too lightweight with duration: {} (threshold {}), scan count: {} (threshold {}), scan bytes: {} (threshold {})",
@@ -524,7 +542,9 @@ public class QueryService extends BasicService {
                     && checkCondition(sqlResponse.getResults().size() < kylinConfig.getLargeQueryThreshold(),
                             "query response is too large: {} ({})", sqlResponse.getResults().size(),
                             kylinConfig.getLargeQueryThreshold())) {
-                cacheManager.getCache(SUCCESS_QUERY_CACHE).put(new Element(sqlRequest.getCacheKey(), sqlResponse));
+                cacheManager.getCache(QUERY_CACHE).put(sqlRequest.getCacheKey(), sqlResponse);
+            } else if (isLazyQueryEnabled) {
+                cacheManager.getCache(QUERY_CACHE).evict(sqlRequest.getCacheKey());
             }
             Trace.addTimelineAnnotation("response from execution");
 
@@ -534,15 +554,15 @@ public class QueryService extends BasicService {
             logger.error("Exception while executing query", e);
             String errMsg = makeErrorMsgUserFriendly(e);
 
-            sqlResponse = new SQLResponse(null, null, null, 0, true, errMsg, false, false);
-            sqlResponse.setTotalScanCount(queryContext.getScannedRows());
-            sqlResponse.setTotalScanBytes(queryContext.getScannedBytes());
-            sqlResponse.setCubeSegmentStatisticsList(queryContext.getCubeSegmentStatisticsResultList());
+            sqlResponse = buildSqlResponse(sqlRequest.getProject(), false, null, null, true, errMsg);
+            sqlResponse.setThrowable(e.getCause() == null ? e : ExceptionUtils.getRootCause(e));
 
             if (queryCacheEnabled && e.getCause() != null
                     && ExceptionUtils.getRootCause(e) instanceof ResourceLimitExceededException) {
-                Cache exceptionCache = cacheManager.getCache(EXCEPTION_QUERY_CACHE);
-                exceptionCache.put(new Element(sqlRequest.getCacheKey(), sqlResponse));
+                Cache exceptionCache = cacheManager.getCache(QUERY_CACHE);
+                exceptionCache.put(sqlRequest.getCacheKey(), sqlResponse);
+            } else if (isLazyQueryEnabled) {
+                cacheManager.getCache(QUERY_CACHE).evict(sqlRequest.getCacheKey());
             }
             Trace.addTimelineAnnotation("error response");
         }
@@ -591,21 +611,54 @@ public class QueryService extends BasicService {
     }
 
     public SQLResponse searchQueryInCache(SQLRequest sqlRequest) {
-        SQLResponse response = null;
-        Cache exceptionCache = cacheManager.getCache(EXCEPTION_QUERY_CACHE);
-        Cache successCache = cacheManager.getCache(SUCCESS_QUERY_CACHE);
-
-        Element element = null;
-        if ((element = exceptionCache.get(sqlRequest.getCacheKey())) != null) {
-            logger.info("The sqlResponse is found in EXCEPTION_QUERY_CACHE");
-            response = (SQLResponse) element.getObjectValue();
-            response.setHitExceptionCache(true);
-        } else if ((element = successCache.get(sqlRequest.getCacheKey())) != null) {
-            logger.info("The sqlResponse is found in SUCCESS_QUERY_CACHE");
-            response = (SQLResponse) element.getObjectValue();
-            response.setStorageCacheUsed(true);
+        Cache queryCache = cacheManager.getCache(QUERY_CACHE);
+        Cache.ValueWrapper wrapper = queryCache.get(sqlRequest.getCacheKey());
+        if (wrapper == null) {
+            return null;
+        }
+        SQLResponse response = (SQLResponse) wrapper.get();
+        if (response == null) {
+            return null;
         }
 
+        // Check whether duplicate query exists
+        while (response.isRunning()) {
+            // Wait at most one minute
+            if (System.currentTimeMillis() - response.getLazyQueryStartTime() >= getConfig()
+                    .getLazyQueryWaitingTimeoutMilliSeconds()) {
+                queryCache.evict(sqlRequest.getCacheKey());
+                return null;
+            }
+            logger.info("Duplicated SQL request is running, waiting...");
+            try {
+                Thread.sleep(100L);
+            } catch (InterruptedException e) {
+                logger.error("Thread interrupted due to " + e);
+                throw new RuntimeException(e);
+            }
+            wrapper = queryCache.get(sqlRequest.getCacheKey());
+            if (wrapper == null) {
+                return null;
+            }
+            response = (SQLResponse) wrapper.get();
+            if (response == null) {
+                return null;
+            }
+        }
+
+        logger.debug("The sqlResponse is found in QUERY_CACHE");
+        if (getConfig().isQueryCacheSignatureEnabled()
+                && !SQLResponseSignatureUtil.checkSignature(getConfig(), response, sqlRequest.getProject())) {
+            logger.info("The sql response signature is changed. Remove it from QUERY_CACHE.");
+            queryCache.evict(sqlRequest.getCacheKey());
+            return null;
+        }
+
+        if (response.getIsException()) {
+            response.setHitExceptionCache(true);
+        } else {
+            response.setStorageCacheUsed(true);
+        }
         return response;
     }
 
@@ -911,7 +964,8 @@ public class QueryService extends BasicService {
 
             // special case for prepare query.
             if (BackdoorToggles.getPrepareOnly()) {
-                return getPrepareOnlySqlResponse(correctedSql, conn, isPushDown, results, columnMetas);
+                return getPrepareOnlySqlResponse(sqlRequest.getProject(), correctedSql, conn, isPushDown, results,
+                        columnMetas);
             }
 
             if (isPrepareStatementWithParams(sqlRequest)) {
@@ -975,14 +1029,15 @@ public class QueryService extends BasicService {
             close(resultSet, stat, null); //conn is passed in, not my duty to close
         }
 
-        return buildSqlResponse(isPushDown, results, columnMetas);
+        return buildSqlResponse(sqlRequest.getProject(), isPushDown, results, columnMetas);
     }
 
     protected String makeErrorMsgUserFriendly(Throwable e) {
         return QueryUtil.makeErrorMsgUserFriendly(e);
     }
 
-    private SQLResponse getPrepareOnlySqlResponse(String correctedSql, Connection conn, Boolean isPushDown,
+    private SQLResponse getPrepareOnlySqlResponse(String projectName, String correctedSql, Connection conn,
+            Boolean isPushDown,
             List<List<String>> results, List<SelectedColumnMeta> columnMetas) throws SQLException {
 
         CalcitePrepareImpl.KYLIN_ONLY_PREPARE.set(true);
@@ -1028,7 +1083,7 @@ public class QueryService extends BasicService {
             DBUtils.closeQuietly(preparedStatement);
         }
 
-        return buildSqlResponse(isPushDown, results, columnMetas);
+        return buildSqlResponse(projectName, isPushDown, results, columnMetas);
     }
 
     private boolean isPrepareStatementWithParams(SQLRequest sqlRequest) {
@@ -1038,10 +1093,16 @@ public class QueryService extends BasicService {
         return false;
     }
 
-    private SQLResponse buildSqlResponse(Boolean isPushDown, List<List<String>> results,
+    private SQLResponse buildSqlResponse(String projectName, Boolean isPushDown, List<List<String>> results,
             List<SelectedColumnMeta> columnMetas) {
+        return buildSqlResponse(projectName, isPushDown, results, columnMetas, false, null);
+    }
+
+    private SQLResponse buildSqlResponse(String projectName, Boolean isPushDown, List<List<String>> results,
+            List<SelectedColumnMeta> columnMetas, boolean isException, String exceptionMessage) {
 
         boolean isPartialResult = false;
+
         StringBuilder cubeSb = new StringBuilder();
         StringBuilder logSb = new StringBuilder("Processed rows for each storageContext: ");
         QueryContext queryContext = QueryContextFacade.current();
@@ -1065,11 +1126,14 @@ public class QueryService extends BasicService {
         }
         logger.info(logSb.toString());
 
-        SQLResponse response = new SQLResponse(columnMetas, results, cubeSb.toString(), 0, false, null, isPartialResult,
-                isPushDown);
+        SQLResponse response = new SQLResponse(columnMetas, results, cubeSb.toString(), 0, isException,
+                exceptionMessage, isPartialResult, isPushDown);
         response.setTotalScanCount(queryContext.getScannedRows());
         response.setTotalScanBytes(queryContext.getScannedBytes());
         response.setCubeSegmentStatisticsList(queryContext.getCubeSegmentStatisticsResultList());
+        if (getConfig().isQueryCacheSignatureEnabled()) {
+            response.setSignature(SQLResponseSignatureUtil.createSignature(getConfig(), response, projectName));
+        }
         return response;
     }
 

@@ -16,7 +16,6 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:context="http://www.springframework.org/schema/context"
        xmlns:mvc="http://www.springframework.org/schema/mvc"
-       xmlns:task="http://www.springframework.org/schema/task"
        xmlns:aop="http://www.springframework.org/schema/aop"
        xmlns:cache="http://www.springframework.org/schema/cache"
        xmlns:p="http://www.springframework.org/schema/p"
@@ -24,8 +23,9 @@
     http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
     http://www.springframework.org/schema/context
     http://www.springframework.org/schema/context/spring-context-4.3.xsd
-    http://www.springframework.org/schema/task
-    http://www.springframework.org/schema/task/spring-task-4.3.xsd
+
+
+
     http://www.springframework.org/schema/mvc
     http://www.springframework.org/schema/mvc/spring-mvc-4.3.xsd
     http://www.springframework.org/schema/aop
@@ -38,7 +38,7 @@
     <mvc:annotation-driven/>
     <aop:aspectj-autoproxy/>
 
-    <bean class="org.apache.kylin.rest.init.InitialTaskManager" />
+    <bean class="org.apache.kylin.rest.init.InitialTaskManager"/>
 
     <context:component-scan base-package="org.apache.kylin.rest"/>
 
@@ -88,17 +88,22 @@
     <!-- Cache Config -->
     <cache:annotation-driven/>
 
-    <bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager"
-          p:cacheManager-ref="ehcache"/>
+
     <beans profile="ldap,saml">
         <bean id="ehcache"
               class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean"
               p:configLocation="classpath:ehcache.xml" p:shared="true"/>
+
+        <bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager"
+              p:cacheManager-ref="ehcache"/>
     </beans>
+
     <beans profile="testing">
         <bean id="ehcache"
               class="org.springframework.cache.ehcache.EhCacheManagerFactoryBean"
               p:configLocation="classpath:ehcache-test.xml" p:shared="true"/>
+        <bean id="cacheManager" class="org.springframework.cache.ehcache.EhCacheCacheManager"
+              p:cacheManager-ref="ehcache"/>
     </beans>
 
 </beans>
